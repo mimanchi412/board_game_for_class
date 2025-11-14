@@ -3,6 +3,8 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/board_game_for_class.iml" filepath="$PROJECT_DIR$/.idea/board_game_for_class.iml" />
+      <module fileurl="file://$PROJECT_DIR$/board_game_frontend_react/board_game_frontend_react.iml" filepath="$PROJECT_DIR$/board_game_frontend_react/board_game_frontend_react.iml" />
+      <module fileurl="file://$PROJECT_DIR$/board_game_frontend_vue/board_game_frontend_vue.iml" filepath="$PROJECT_DIR$/board_game_frontend_vue/board_game_frontend_vue.iml" />
     </modules>
   </component>
 </project>
