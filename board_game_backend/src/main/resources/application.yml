@@ -1,0 +1,93 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: board_game_backend
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+  datasource:
+    url: jdbc:postgresql://localhost:5432/board_game_db
+    username: postgres
+    password: 191599
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # Redis??
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 0
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  mail:
+    host: smtp.163.com
+    username: boardgameforai@163.com
+    password: UKv3DD4yxAguwDZi
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+# MyBatis Plus??
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  # ??mapper xml????
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+
+# JWT??
+jwt:
+  secret: mySecretKeyForBoardGameBackend
+  expiration: 86400 # 24??????
+
+# ????
+logging:
+  level:
+    com.xiarui.board_game_backend: DEBUG
+    org.springframework.security: DEBUG
+  charset:
+    console: UTF-8
+    file: UTF-8
+
+mail:
+  from: boardgameforai@163.com
+
+mq:
+  mail:
+    exchange: mail.exchange
+    queue: mail.queue
+    routing-key: mail.routing
