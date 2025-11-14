@@ -13,6 +13,7 @@ import com.xiarui.board_game_backend.game.entity.enums.GameRoomStatus;
 import com.xiarui.board_game_backend.game.entity.model.GameRoomInfo;
 import com.xiarui.board_game_backend.game.entity.vo.GameRoomVO;
 import com.xiarui.board_game_backend.game.entity.vo.MatchJoinResponse;
+import com.xiarui.board_game_backend.game.service.GameMatchService;
 import com.xiarui.board_game_backend.game.service.GameRoomService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ public class GameRoomServiceImpl implements GameRoomService {
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final UserAccountMapper userAccountMapper;
+    private final GameMatchService gameMatchService;
 
     private static final int ROOM_CAPACITY = 3;
 
@@ -125,7 +127,7 @@ public class GameRoomServiceImpl implements GameRoomService {
         }
         room.setStatus(GameRoomStatus.PLAYING);
         saveRoom(room);
-        // TODO: 进一步记录 game_match / game_match_player，并通过 WebSocket 广播发牌等事件
+        gameMatchService.initializeMatch(room);
         log.info("Room {} start game with members {}", roomId, room.getMemberIds());
         return toVO(room);
     }

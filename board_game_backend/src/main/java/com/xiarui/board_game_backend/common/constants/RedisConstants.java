@@ -89,6 +89,24 @@ public class RedisConstants {
     /** 用户 -> 房间 映射前缀 */
     public static final String GAME_ROOM_USER_PREFIX = "game:room:user:";
 
+    /** 房间内实时心跳 key 前缀 */
+    public static final String GAME_ROOM_HEARTBEAT_PREFIX = "game:room:heartbeat:";
+
+    /** 牌局状态存储 key 前缀 */
+    public static final String GAME_MATCH_STATE_PREFIX = "game:match:state:";
+
+    /** 牌局心跳 TTL（秒） */
+    public static final long GAME_HEARTBEAT_TTL_SECONDS = 30L;
+
+    /** 牌局状态 TTL（秒） */
+    public static final long GAME_MATCH_STATE_TTL_SECONDS = 3600L;
+
+    /** 每回合操作超时时长（秒） */
+    public static final long GAME_TURN_TIMEOUT_SECONDS = 20L;
+
+    /** 心跳掉线缓冲（秒） */
+    public static final long GAME_HEARTBEAT_BUFFER_SECONDS = 10L;
+
     /** 短信验证码发送频率限制前缀 */
     public static final String SMS_CODE_RATE_LIMIT_PREFIX = "sms_code_rate_limit:";
 
