@@ -1,5 +1,7 @@
 package com.xiarui.board_game_backend.game.service;
 
+import com.xiarui.board_game_backend.game.entity.dto.BidActionRequest;
+import com.xiarui.board_game_backend.game.entity.dto.PlayCardRequest;
 import com.xiarui.board_game_backend.game.entity.model.GameMatchState;
 import com.xiarui.board_game_backend.game.entity.model.GameRoomInfo;
 import com.xiarui.board_game_backend.game.entity.vo.GameSnapshotVO;
@@ -16,6 +18,12 @@ public interface GameMatchService {
     void handleHeartbeat(String roomId, Long userId);
 
     void handleSurrender(String roomId, Long userId);
+
+    void handleBid(String roomId, Long userId, BidActionRequest request);
+
+    void handlePlay(String roomId, Long userId, PlayCardRequest request);
+
+    void handlePass(String roomId, Long userId);
 
     GameMatchState getState(String roomId);
 }

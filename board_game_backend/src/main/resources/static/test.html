@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <title>斗地主 后端/WS 自测页</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        input, select, button { margin: 4px; }
+        fieldset { margin-bottom: 12px; }
+        .log-wrap { background: #0f1729; color: #cbd5e1; padding: 8px; border-radius: 6px; }
+        .log-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .log-panel { height: 360px; overflow: auto; border: 1px solid #1f2a44; border-radius: 4px; padding: 6px; background: #0b1220; font-family: "JetBrains Mono","Fira Code", monospace; font-size: 13px; }
+        .log-row { padding: 4px 6px; margin-bottom: 4px; border-bottom: 1px dashed #1f2a44; }
+        .log-row:last-child { border-bottom: none; }
+        .log-time { color: #94a3b8; margin-right: 8px; }
+        .log-body { white-space: pre-wrap; word-wrap: break-word; margin: 2px 0 0; }
+        .nowrap .log-body { white-space: pre; overflow-x: auto; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #1d4ed8; color: #fff; font-size: 12px; margin-right: 6px; }
+    </style>
+</head>
+<body>
+<h2>斗地主 后端+WS 自测页</h2>
+
+<fieldset>
+    <legend>基础配置</legend>
+    <div>
+        <label>API 地址（http://）：</label>
+        <input id="apiBase" value="http://localhost:8080" size="32"/>
+    </div>
+    <div>
+        <label>WebSocket 地址（http:// 或 https://）：</label>
+        <input id="wsUrl" value="http://localhost:8080/ws" size="40"/>
+    </div>
+    <div>
+        <label>JWT Token：</label>
+        <input id="jwtToken" placeholder="登录后自动填充" size="70"/>
+        <button onclick="copySavedToken()">读取本地 token</button>
+        <button onclick="clearToken()">清除 token</button>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>登录</legend>
+    <div>
+        <label>用户名：</label><input id="loginUsername" value="user1" size="20"/>
+        <label>密码：</label><input id="loginPassword" type="password" value="123456" size="20"/>
+        <button onclick="login()">登录并保存 token</button>
+    </div>
+    <div>
+        <small>登录成功后会将 token 写入 localStorage，并同步到下方房间/WS 区域。</small>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>房间 REST 测试</legend>
+    <div>
+        <label>房间名称：</label><input id="roomName" value="测试房间" size="20"/>
+        <button onclick="createRoom()">创建自定义房间</button>
+    </div>
+    <div>
+        <label>房间码：</label><input id="roomCode" size="10"/>
+        <button onclick="joinByCode()">通过房间码加入</button>
+    </div>
+    <div>
+        <label>房间ID：</label><input id="roomId" size="36"/>
+        <button onclick="getMyRoom()">查询我所在房间</button>
+    </div>
+    <div>
+        <label>准备状态：</label>
+        <select id="readyFlag">
+            <option value="true" selected>准备</option>
+            <option value="false">取消准备</option>
+        </select>
+        <button onclick="toggleReady()">切换准备</button>
+        <button onclick="startGame()">开始游戏</button>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>WebSocket/STOMP</legend>
+    <div>
+        <label>房间号：</label>
+        <input id="wsRoomId" placeholder="用于订阅/发送" size="20"/>
+        <button onclick="syncRoomId()">同步为上方房间ID</button>
+    </div>
+    <div>
+        <button onclick="connect()">连接</button>
+        <button onclick="disconnect()">断开</button>
+    </div>
+    <div>
+        <button onclick="subscribeSnapshot()">订阅快照</button>
+        <button onclick="subscribeHeartbeatAck()">订阅心跳 ACK</button>
+        <button onclick="subscribeBroadcast()">订阅房间广播</button>
+    </div>
+    <div>
+        <button onclick="sendSnapshot()">请求快照</button>
+        <button onclick="sendHeartbeat()">发送心跳</button>
+        <button onclick="sendSurrender()">发送投降</button>
+        <button onclick="sendBid(true)">叫/抢地主</button>
+        <button onclick="sendBid(false)">不叫</button>
+        <input id="playCards" placeholder="出牌，例如 S3,H3" size="30"/>
+        <input id="playPattern" placeholder="牌型(可选)" size="15"/>
+        <button onclick="sendPlay()">出牌</button>
+        <button onclick="sendPass()">不出</button>
+    </div>
+</fieldset>
+
+<hr/>
+<h3>日志</h3>
+<div class="log-wrap">
+    <div class="log-toolbar">
+        <label><input type="checkbox" id="autoScroll" checked/> 自动滚动</label>
+        <label><input type="checkbox" id="wrapToggle" checked/> 自动换行</label>
+        <input id="logFilter" placeholder="过滤关键字" size="20"/>
+        <button onclick="applyFilter()">过滤</button>
+        <button onclick="clearLog()">清空</button>
+    </div>
+    <div id="logPanel" class="log-panel"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+<script>
+    let stompClient = null;
+    const TOKEN_STORAGE_KEY = 'board_game_test_token';
+
+    window.addEventListener('load', () => {
+        copySavedToken();
+    });
+
+    function log(msg) {
+        const panel = document.getElementById('logPanel');
+        if (!panel) return;
+        const row = document.createElement('div');
+        row.className = 'log-row';
+
+        const time = document.createElement('span');
+        time.className = 'log-time';
+        time.textContent = new Date().toLocaleTimeString();
+
+        const body = document.createElement('div');
+        body.className = 'log-body';
+        body.textContent = formatLog(msg);
+
+        row.dataset.raw = msg.toLowerCase();
+        row.appendChild(time);
+        row.appendChild(body);
+        panel.appendChild(row);
+
+        applyWrap();
+        applyFilter();
+        const auto = document.getElementById('autoScroll')?.checked;
+        if (auto) {
+            panel.scrollTop = panel.scrollHeight;
+        }
+    }
+
+    function formatLog(msg) {
+        if (!msg) return '';
+        const text = msg.toString();
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+                const obj = JSON.parse(trimmed);
+                return JSON.stringify(obj, null, 2);
+            } catch (_) {
+                return text;
+            }
+        }
+        return text;
+    }
+
+    function applyWrap() {
+        const panel = document.getElementById('logPanel');
+        if (!panel) return;
+        const wrapOn = document.getElementById('wrapToggle')?.checked;
+        if (wrapOn) {
+            panel.classList.remove('nowrap');
+        } else {
+            panel.classList.add('nowrap');
+        }
+    }
+
+    function applyFilter() {
+        const keyword = (document.getElementById('logFilter')?.value || '').trim().toLowerCase();
+        const rows = document.querySelectorAll('#logPanel .log-row');
+        rows.forEach(r => {
+            const raw = r.dataset.raw || '';
+            r.style.display = !keyword || raw.includes(keyword) ? '' : 'none';
+        });
+    }
+
+    function clearLog() {
+        const panel = document.getElementById('logPanel');
+        if (panel) panel.innerHTML = '';
+    }
+
+    function setToken(token) {
+        document.getElementById('jwtToken').value = token;
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    }
+
+    function copySavedToken() {
+        const t = localStorage.getItem(TOKEN_STORAGE_KEY);
+        if (t) {
+            document.getElementById('jwtToken').value = t;
+            log('已从 localStorage 读取 token');
+        }
+    }
+
+    function clearToken() {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        document.getElementById('jwtToken').value = '';
+        log('已清除 token');
+    }
+
+    async function login() {
+        const base = document.getElementById('apiBase').value.trim();
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        if (!base || !username || !password) {
+            alert('请填写 API 地址、用户名和密码');
+            return;
+        }
+        try {
+            const res = await fetch(base + '/api/auth/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message || res.statusText);
+            }
+            const token = data.data?.token || data.token || data.data;
+            if (!token) {
+                throw new Error('未获取到 token');
+            }
+            setToken(token);
+            log('登录成功，token 已保存');
+        } catch (e) {
+            log('登录失败: ' + e.message);
+            alert(e.message);
+        }
+    }
+
+    function authHeaders() {
+        const token = document.getElementById('jwtToken').value.trim();
+        return token ? {'Authorization': 'Bearer ' + token} : {};
+    }
+
+    async function callApi(path, options = {}) {
+        const base = document.getElementById('apiBase').value.trim();
+        if (!base) {
+            throw new Error('请先填写 API 地址');
+        }
+        const res = await fetch(base + path, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders(),
+                ...(options.headers || {})
+            }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.message || res.statusText);
+        }
+        return data;
+    }
+
+    async function createRoom() {
+        try {
+            const roomName = document.getElementById('roomName').value.trim();
+            const data = await callApi('/api/game/rooms/custom', {
+                method: 'POST',
+                body: JSON.stringify({roomName})
+            });
+            const room = data.data || data;
+            document.getElementById('roomId').value = room.roomId;
+            document.getElementById('roomCode').value = room.roomCode || '';
+            document.getElementById('wsRoomId').value = room.roomId;
+            log('创建房间成功: ' + JSON.stringify(room));
+        } catch (e) {
+            log('创建房间失败: ' + e.message);
+            alert(e.message);
+        }
+    }
+
+    async function joinByCode() {
+        try {
+            const roomCode = document.getElementById('roomCode').value.trim();
+            if (!roomCode) {
+                alert('请输入房间码');
+                return;
+            }
+            const data = await callApi('/api/game/rooms/custom/join', {
+                method: 'POST',
+                body: JSON.stringify({roomCode})
+            });
+            const room = data.data || data;
+            document.getElementById('roomId').value = room.roomId;
+            document.getElementById('wsRoomId').value = room.roomId;
+            log('加入房间成功: ' + JSON.stringify(room));
+        } catch (e) {
+            log('加入房间失败: ' + e.message);
+            alert(e.message);
+        }
+    }
+
+    async function getMyRoom() {
+        try {
+            const data = await callApi('/api/game/rooms/my', {method: 'GET'});
+            const room = data.data || data;
+            document.getElementById('roomId').value = room.roomId;
+            document.getElementById('roomCode').value = room.roomCode || '';
+            document.getElementById('wsRoomId').value = room.roomId;
+            log('我的房间: ' + JSON.stringify(room));
+        } catch (e) {
+            log('查询房间失败: ' + e.message);
+            alert(e.message);
+        }
+    }
+
+    async function toggleReady() {
+        try {
+            const roomId = document.getElementById('roomId').value.trim();
+            if (!roomId) {
+                alert('请填写房间ID');
+                return;
+            }
+            const ready = document.getElementById('readyFlag').value === 'true';
+            const data = await callApi(`/api/game/rooms/${roomId}/ready`, {
+                method: 'POST',
+                body: JSON.stringify({ready})
+            });
+            log('切换准备成功: ' + JSON.stringify(data));
+        } catch (e) {
+            log('切换准备失败: ' + e.message);
+            alert(e.message);
+        }
+    }
+
+    async function startGame() {
+        try {
+            const roomId = document.getElementById('roomId').value.trim();
+            if (!roomId) {
+                alert('请填写房间ID');
+                return;
+            }
+            const data = await callApi(`/api/game/rooms/${roomId}/start`, {method: 'POST'});
+            log('开始游戏: ' + JSON.stringify(data));
+        } catch (e) {
+            log('开始游戏失败: ' + e.message);
+            alert(e.message);
+        }
+    }
+
+    function syncRoomId() {
+        document.getElementById('wsRoomId').value = document.getElementById('roomId').value.trim();
+    }
+
+    function connect() {
+        const baseUrl = document.getElementById('wsUrl').value.trim();
+        const token = document.getElementById('jwtToken').value.trim();
+        if (!baseUrl) {
+            alert('请填写 WebSocket 地址');
+            return;
+        }
+        if (!token) {
+            alert('请填写 JWT');
+            return;
+        }
+        const fullUrl = `${baseUrl}?token=${encodeURIComponent(token)}`;
+        log('握手地址: ' + fullUrl);
+
+        const socket = new SockJS(fullUrl);
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null;
+
+        stompClient.connect({'Authorization': 'Bearer ' + token}, frame => {
+            log('连接成功: ' + frame);
+        }, error => {
+            log('连接失败: ' + error);
+        });
+    }
+
+    function disconnect() {
+        if (stompClient) {
+            stompClient.disconnect(() => log('已断开连接'));
+            stompClient = null;
+        }
+    }
+
+    function requireClient() {
+        if (!stompClient || !stompClient.connected) {
+            alert('请先连接');
+            throw new Error('not connected');
+        }
+    }
+
+    function wsRoom() {
+        const roomId = document.getElementById('wsRoomId').value.trim();
+        if (!roomId) {
+            alert('请在“房间号”里填写房间ID');
+            throw new Error('room missing');
+        }
+        return roomId;
+    }
+
+    function subscribeSnapshot() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/user/queue/room/${roomId}/snapshot`;
+            stompClient.subscribe(dest, msg => log('【快照】' + msg.body));
+            log('已订阅 ' + dest);
+        } catch (_) {}
+    }
+
+    function subscribeHeartbeatAck() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/user/queue/room/${roomId}/heartbeat`;
+            stompClient.subscribe(dest, msg => log('【心跳ACK】' + msg.body));
+            log('已订阅 ' + dest);
+        } catch (_) {}
+    }
+
+    function subscribeBroadcast() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/topic/rooms/${roomId}`;
+            stompClient.subscribe(dest, msg => log('【广播】' + msg.body));
+            log('已订阅 ' + dest);
+        } catch (_) {}
+    }
+
+    function sendSnapshot() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/app/room/${roomId}/snapshot`;
+            stompClient.send(dest, {'content-type': 'application/json'}, '{}');
+            log('发送 Snapshot -> ' + dest);
+        } catch (_) {}
+    }
+
+    function sendHeartbeat() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/app/room/${roomId}/heartbeat`;
+            stompClient.send(dest, {'content-type': 'application/json'}, '{}');
+            log('发送 Heartbeat -> ' + dest);
+        } catch (_) {}
+    }
+
+    function sendSurrender() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/app/room/${roomId}/surrender`;
+            stompClient.send(dest, {'content-type': 'application/json'}, '{}');
+            log('发送 Surrender -> ' + dest);
+        } catch (_) {}
+    }
+
+    function sendBid(call) {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/app/room/${roomId}/bid`;
+            const payload = {callLandlord: call};
+            stompClient.send(dest, {'content-type': 'application/json'}, JSON.stringify(payload));
+            log('发送 Bid -> ' + dest + ' call=' + call);
+        } catch (_) {}
+    }
+
+    function sendPlay() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/app/room/${roomId}/play`;
+            const cardsInput = document.getElementById('playCards').value.trim();
+            if (!cardsInput) {
+                alert('请输入要出的牌，逗号分隔，如 S3,H3');
+                return;
+            }
+            const payload = {
+                cards: cardsInput.split(',').map(s => s.trim()).filter(Boolean),
+                pattern: document.getElementById('playPattern').value.trim() || null
+            };
+            stompClient.send(dest, {'content-type': 'application/json'}, JSON.stringify(payload));
+            log('发送 Play -> ' + dest + ' ' + JSON.stringify(payload));
+        } catch (_) {}
+    }
+
+    function sendPass() {
+        try { requireClient(); const roomId = wsRoom();
+            const dest = `/app/room/${roomId}/pass`;
+            stompClient.send(dest, {'content-type': 'application/json'}, '{}');
+            log('发送 Pass -> ' + dest);
+        } catch (_) {}
+    }
+</script>
+</body>
+</html>

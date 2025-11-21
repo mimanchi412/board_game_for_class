@@ -50,7 +50,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<Void> handleException(Exception ex) {
         log.error("系统异常", ex);
-        return Result.error(ResultCode.SYSTEM_ERROR);
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            message = ResultCode.SYSTEM_ERROR.getMessage();
+        }
+        return Result.error(ResultCode.SYSTEM_ERROR, message);
     }
 
     private String extractFieldErrors(java.util.List<FieldError> errors) {

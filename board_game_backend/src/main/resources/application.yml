@@ -79,6 +79,8 @@ logging:
   level:
     com.xiarui.board_game_backend: DEBUG
     org.springframework.security: DEBUG
+    com.xiarui.board_game_backend.common.interceptor: DEBUG
+    org.springframework.messaging: DEBUG
   charset:
     console: UTF-8
     file: UTF-8
