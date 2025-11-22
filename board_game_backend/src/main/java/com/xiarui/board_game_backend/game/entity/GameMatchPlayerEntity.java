@@ -24,4 +24,5 @@ public class GameMatchPlayerEntity {
     private Integer bombs;
     private Integer leftCards;
     private Integer durationSec;
+    private Boolean escaped;
 }

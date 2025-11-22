@@ -17,7 +17,7 @@ public class GameMatchEntity {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long roomId;
+    private String roomId;
     private Long landlordUserId;
     private String winnerSide;
     private OffsetDateTime startTime;

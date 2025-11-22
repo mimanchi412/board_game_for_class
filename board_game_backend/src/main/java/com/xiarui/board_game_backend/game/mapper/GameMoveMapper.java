@@ -3,6 +3,10 @@ package com.xiarui.board_game_backend.game.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.xiarui.board_game_backend.game.entity.GameMoveEntity;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
 
 /**
  * game_move 基础操作。

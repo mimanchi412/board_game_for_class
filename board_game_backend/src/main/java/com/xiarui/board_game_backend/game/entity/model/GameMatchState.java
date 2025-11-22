@@ -36,6 +36,7 @@ public class GameMatchState {
     private Long currentTurnUserId;
     private long turnDeadlineEpochMillis;
     private boolean surrendering;
+    private Map<Long, Integer> offlineTimeoutCount = new HashMap<>();
     private Instant createdAt = Instant.now();
     private Instant updatedAt = Instant.now();
     /**
@@ -62,6 +63,7 @@ public class GameMatchState {
         private boolean autoPlay;
         private boolean surrendered;
         private int scoreDelta;
+        private boolean escaped;
     }
 
     @Data

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiarui.board_game_backend.auth.entity.UserAccount;
 import com.xiarui.board_game_backend.auth.mapper.UserAccountMapper;
+import com.xiarui.board_game_backend.common.config.GameSettingsProperties;
 import com.xiarui.board_game_backend.common.constants.RedisConstants;
 import com.xiarui.board_game_backend.game.entity.GameMatchEntity;
 import com.xiarui.board_game_backend.game.entity.GameMatchPlayerEntity;
@@ -69,6 +70,7 @@ public class GameMatchServiceImpl implements GameMatchService {
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate messagingTemplate;
     private final UserAccountMapper userAccountMapper;
+    private final GameSettingsProperties gameSettings;
     private final GameMatchMapper gameMatchMapper;
     private final GameMatchPlayerMapper gameMatchPlayerMapper;
     private final GameMoveMapper gameMoveMapper;
@@ -81,6 +83,12 @@ public class GameMatchServiceImpl implements GameMatchService {
         return t;
     });
     private final ConcurrentHashMap<String, Future<?>> bidTimeoutTasks = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService playTimeoutExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "play-timeout");
+        t.setDaemon(true);
+        return t;
+    });
+    private final ConcurrentHashMap<String, Future<?>> playTimeoutTasks = new ConcurrentHashMap<>();
 
     @Override
     public GameMatchState initializeMatch(GameRoomInfo roomInfo) {
@@ -161,7 +169,7 @@ public class GameMatchServiceImpl implements GameMatchService {
     public void handleHeartbeat(String roomId, Long userId) {
         String key = RedisConstants.GAME_ROOM_HEARTBEAT_PREFIX + roomId + ":" + userId;
         stringRedisTemplate.opsForValue().set(key, String.valueOf(System.currentTimeMillis()),
-                Duration.ofSeconds(RedisConstants.GAME_HEARTBEAT_TTL_SECONDS));
+                Duration.ofSeconds(gameSettings.getTimeout().getHeartbeatSeconds()));
         String username = resolveUsername(userId);
         GameEventMessage ack = GameEventMessage.of(GameEventType.HEARTBEAT_ACK,
                 Map.of("roomId", roomId, "serverTime", System.currentTimeMillis()));
@@ -184,6 +192,28 @@ public class GameMatchServiceImpl implements GameMatchService {
         persistState(state);
         SurrenderPayload payload = new SurrenderPayload(roomId, state.getMatchId(), userId, 100);
         messagingTemplate.convertAndSend(roomTopic(roomId), GameEventMessage.of(GameEventType.SURRENDER, payload));
+    }
+
+    @Override
+    public void handleOfflineTimeout(String roomId, Long userId) {
+        GameMatchState state = getState(roomId);
+        GameMatchState.PlayerState ps = state.findPlayer(userId);
+        if (ps == null) {
+            throw new IllegalArgumentException("玩家不在当前牌局中");
+        }
+        int count = state.getOfflineTimeoutCount().getOrDefault(userId, 0) + 1;
+        state.getOfflineTimeoutCount().put(userId, count);
+        if (count >= gameSettings.getOffline().getMaxTimeoutBeforeEscape()) {
+            ps.setEscaped(true);
+            persistState(state);
+            handleSurrender(roomId, userId);
+            return;
+        }
+        ps.setAutoPlay(true);
+        persistState(state);
+        messagingTemplate.convertAndSend(roomTopic(roomId),
+                GameEventMessage.of(GameEventType.AUTO_PLAY,
+                        Map.of("roomId", roomId, "userId", userId, "reason", "OFFLINE_TIMEOUT")));
     }
 
     @Override
@@ -367,7 +397,7 @@ public class GameMatchServiceImpl implements GameMatchService {
             stringRedisTemplate.opsForValue().set(
                     RedisConstants.GAME_MATCH_STATE_PREFIX + state.getRoomId(),
                     json,
-                    Duration.ofSeconds(RedisConstants.GAME_MATCH_STATE_TTL_SECONDS));
+                    Duration.ofSeconds(gameSettings.getMatchState().getActiveTtlSeconds()));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("牌局状态序列化失败", e);
         }
@@ -421,6 +451,7 @@ public class GameMatchServiceImpl implements GameMatchService {
             scheduleBidTimeout(state);
         } else {
             cancelBidTimeout(state.getRoomId());
+            schedulePlayTimeout(state);
         }
     }
 
@@ -472,11 +503,13 @@ public class GameMatchServiceImpl implements GameMatchService {
         state.getRobMap().clear();
         state.setConsecutiveNoRob(0);
         state.getLandlordCards().clear();
+        state.getOfflineTimeoutCount().clear();
         state.getPlayers().forEach(ps -> {
             ps.getHandCards().clear();
             ps.setRole(PlayerRole.UNKNOWN);
             ps.setAutoPlay(false);
             ps.setSurrendered(false);
+            ps.setEscaped(false);
         });
         for (int i = 0; i < state.getSeatOrder().size(); i++) {
             Long uid = state.getSeatOrder().get(i);
@@ -496,6 +529,7 @@ public class GameMatchServiceImpl implements GameMatchService {
 
     private void settle(GameMatchState state, Long winnerId) {
         cancelBidTimeout(state.getRoomId());
+        cancelPlayTimeout(state.getRoomId());
         state.setPhase(GamePhase.SETTLEMENT);
         state.setCurrentTurnUserId(winnerId);
         Instant endTime = Instant.now();
@@ -536,7 +570,10 @@ public class GameMatchServiceImpl implements GameMatchService {
                     ? ("LANDLORD".equals(winnerSide) ? scoreUnit * 2 : scoreUnit)
                     : ("LANDLORD".equals(winnerSide) ? -scoreUnit : -scoreUnit * 2);
             if (ps.isSurrendered()) {
-                delta -= 100;
+                delta -= gameSettings.getPenalty().getSurrender();
+            }
+            if (ps.isEscaped()) {
+                delta -= gameSettings.getPenalty().getEscape();
             }
             scoreDelta.put(ps.getUserId(), delta);
             ps.setScoreDelta(delta);
@@ -544,6 +581,14 @@ public class GameMatchServiceImpl implements GameMatchService {
 
         persistMatchResult(state, winnerSide, scoreDelta, bombsByUser, scoreUnit, spring, endTime);
         persistState(state);
+        // 结算后缩短状态保留时间，避免 Redis 长时间占用。
+        long ttlMinutes = gameSettings.getMatchState().getSettledTtlMinutes();
+        if (ttlMinutes > 0) {
+            stringRedisTemplate.expire(RedisConstants.GAME_MATCH_STATE_PREFIX + state.getRoomId(),
+                    Duration.ofMinutes(ttlMinutes));
+        } else {
+            stringRedisTemplate.delete(RedisConstants.GAME_MATCH_STATE_PREFIX + state.getRoomId());
+        }
         messagingTemplate.convertAndSend(roomTopic(state.getRoomId()),
                 GameEventMessage.of(GameEventType.GAME_RESULT,
                         Map.of("roomId", state.getRoomId(),
@@ -600,7 +645,7 @@ public class GameMatchServiceImpl implements GameMatchService {
     }
 
     private long nextDeadline() {
-        return Instant.now().plusSeconds(RedisConstants.GAME_TURN_TIMEOUT_SECONDS).toEpochMilli();
+        return Instant.now().plusSeconds(gameSettings.getTimeout().getTurnSeconds()).toEpochMilli();
     }
 
     private void recordMove(GameMatchState state, Long userId, String pattern, List<String> cards, boolean beatsPrev) {
@@ -637,7 +682,7 @@ public class GameMatchServiceImpl implements GameMatchService {
                                     boolean spring,
                                     Instant endTime) {
         GameMatchEntity match = new GameMatchEntity();
-        match.setRoomId(null);
+        match.setRoomId(state.getRoomId());
         match.setLandlordUserId(state.getLandlordId());
         match.setWinnerSide(winnerSide);
         match.setStartTime(toOffset(state.getStartTime()));
@@ -700,6 +745,7 @@ public class GameMatchServiceImpl implements GameMatchService {
             entity.setBombs(bombsByUser.getOrDefault(ps.getUserId(), 0));
             entity.setLeftCards(ps.getHandCards().size());
             entity.setDurationSec(durationSec);
+            entity.setEscaped(ps.isEscaped());
             gameMatchPlayerMapper.insert(entity);
         }
     }
@@ -845,6 +891,54 @@ public class GameMatchServiceImpl implements GameMatchService {
         Future<?> future = bidTimeoutTasks.remove(roomId);
         if (future != null) {
             future.cancel(false);
+        }
+    }
+
+    private void autoPlayTimeout(GameMatchState state, Long userId) {
+        GameMatchState.LastPlay last = state.getLastPlay();
+        boolean canPass = last != null && !userId.equals(last.getUserId());
+        if (canPass) {
+            handlePass(state.getRoomId(), userId);
+            return;
+        }
+        GameMatchState.PlayerState ps = state.findPlayer(userId);
+        if (ps == null || ps.getHandCards().isEmpty()) {
+            handlePass(state.getRoomId(), userId);
+            return;
+        }
+        List<String> cards = List.of(ps.getHandCards().get(0));
+        PlayCardRequest req = new PlayCardRequest();
+        req.setCards(cards);
+        handlePlay(state.getRoomId(), userId, req);
+    }
+
+    private void schedulePlayTimeout(GameMatchState state) {
+        cancelPlayTimeout(state.getRoomId());
+        long delayMs = Math.max(0, state.getTurnDeadlineEpochMillis() - System.currentTimeMillis());
+        Long userId = state.getCurrentTurnUserId();
+        String roomId = state.getRoomId();
+        Future<?> future = playTimeoutExecutor.schedule(() -> {
+            try {
+                GameMatchState latest = getState(roomId);
+                if (latest.getPhase() != GamePhase.PLAY) {
+                    return;
+                }
+                if (!userId.equals(latest.getCurrentTurnUserId())) {
+                    return;
+                }
+                autoPlayTimeout(latest, userId);
+                log.info("Play timeout auto action, room={}, user={}", roomId, userId);
+            } catch (Exception e) {
+                log.warn("Play timeout auto action failed, room={}, user={}", roomId, userId, e);
+            }
+        }, delayMs, TimeUnit.MILLISECONDS);
+        playTimeoutTasks.put(roomId, future);
+    }
+
+    private void cancelPlayTimeout(String roomId) {
+        Future<?> f = playTimeoutTasks.remove(roomId);
+        if (f != null) {
+            f.cancel(false);
         }
     }
 }

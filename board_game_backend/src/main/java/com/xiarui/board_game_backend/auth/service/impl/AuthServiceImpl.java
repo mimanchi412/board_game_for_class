@@ -103,11 +103,14 @@ public class AuthServiceImpl implements AuthService {
         String token = jwtUtil.generateToken(userAccount.getUsername(), userAccount.getRole());
         userAccount.setLastLoginTime(OffsetDateTime.now());
         userAccountMapper.updateById(userAccount);
-        redisService.set(
-                RedisConstants.USER_TOKEN_PREFIX + token,
-                userAccount.getUsername(),
-                RedisConstants.USER_TOKEN_EXPIRE_TIME
-        );
+        String activeTokenKey = RedisConstants.USER_TOKEN_PREFIX + "active:" + userAccount.getId();
+        Object oldTokenObj = redisService.get(activeTokenKey);
+        if (oldTokenObj instanceof String oldToken && !oldToken.isBlank()) {
+            redisService.del(RedisConstants.USER_TOKEN_PREFIX + oldToken);
+        }
+        redisService.set(RedisConstants.USER_TOKEN_PREFIX + token, userAccount.getUsername(),
+                RedisConstants.USER_TOKEN_EXPIRE_TIME);
+        redisService.set(activeTokenKey, token, RedisConstants.USER_TOKEN_EXPIRE_TIME);
         return token;
     }
 
@@ -159,7 +162,26 @@ public class AuthServiceImpl implements AuthService {
         if (token == null || token.isBlank()) {
             return;
         }
+        String username = null;
+        try {
+            if (jwtUtil.validateToken(token)) {
+                username = jwtUtil.getUsernameFromToken(token);
+            }
+        } catch (Exception ignored) {
+        }
+        if (username == null) {
+            Object cached = redisService.get(RedisConstants.USER_TOKEN_PREFIX + token);
+            if (cached instanceof String name && !name.isBlank()) {
+                username = name;
+            }
+        }
         redisService.del(RedisConstants.USER_TOKEN_PREFIX + token);
+        if (username != null) {
+            UserAccount userAccount = userAccountMapper.findByUsername(username);
+            if (userAccount != null) {
+                redisService.del(RedisConstants.USER_TOKEN_PREFIX + "active:" + userAccount.getId());
+            }
+        }
     }
 
     private void validateVerificationCode(String email, String code) {

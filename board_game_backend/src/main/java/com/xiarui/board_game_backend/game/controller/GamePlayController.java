@@ -73,7 +73,12 @@ public class GamePlayController {
     @MessageMapping("/room/{roomId}/play")
     public void play(@DestinationVariable String roomId, PlayCardRequest request, Principal principal) {
         WsUserPrincipal user = requirePrincipal(principal);
-        gameMatchService.handlePlay(roomId, user.getUserId(), request);
+        try {
+            gameMatchService.handlePlay(roomId, user.getUserId(), request);
+        } catch (Exception ex) {
+            sendError(principal, ex.getMessage());
+            throw ex;
+        }
     }
 
     /**
@@ -82,7 +87,12 @@ public class GamePlayController {
     @MessageMapping("/room/{roomId}/pass")
     public void pass(@DestinationVariable String roomId, Principal principal) {
         WsUserPrincipal user = requirePrincipal(principal);
-        gameMatchService.handlePass(roomId, user.getUserId());
+        try {
+            gameMatchService.handlePass(roomId, user.getUserId());
+        } catch (Exception ex) {
+            sendError(principal, ex.getMessage());
+            throw ex;
+        }
     }
 
     private WsUserPrincipal requirePrincipal(Principal principal) {
@@ -99,6 +109,14 @@ public class GamePlayController {
             messagingTemplate.convertAndSendToUser(wsUserPrincipal.getName(),
                     "/queue/errors",
                     GameEventMessage.of(GameEventType.ERROR, java.util.Map.of("message", ex.getMessage())));
+        }
+    }
+
+    private void sendError(Principal principal, String message) {
+        if (principal instanceof WsUserPrincipal wsUserPrincipal) {
+            messagingTemplate.convertAndSendToUser(wsUserPrincipal.getName(),
+                    "/queue/errors",
+                    GameEventMessage.of(GameEventType.ERROR, java.util.Map.of("message", message)));
         }
     }
 }

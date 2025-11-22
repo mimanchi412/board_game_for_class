@@ -93,3 +93,17 @@ mq:
     exchange: mail.exchange
     queue: mail.queue
     routing-key: mail.routing
+
+game:
+  timeout:
+    turn-seconds: 20       # 每回合操作超时时长
+    heartbeat-seconds: 30  # 心跳 TTL
+    heartbeat-buffer-seconds: 10 # 心跳缓冲
+  penalty:
+    surrender: 100         # 主动投降扣分
+    escape: 200            # 掉线逃跑扣分
+  offline:
+    max-timeout-before-escape: 2 # 掉线判逃前的超时次数
+  match-state:
+    active-ttl-seconds: 3600 # 进行中牌局状态 TTL
+    settled-ttl-minutes: 5  # 结算后状态在 Redis 保留分钟数
