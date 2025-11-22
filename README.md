@@ -55,6 +55,86 @@ GET /api/game/history/my?page=1&size=10
 }
 ```
 
+### 认证接口
+- `POST /api/auth/register` body: `{username,password,nickname,email,gender,verificationCode}` 注册
+- `POST /api/auth/login` body: `{username,password}` -> 返回 `token`
+- `POST /api/auth/logout` header: `Authorization: Bearer <token>` 退出并清理 Redis token
+- `POST /api/auth/reset-password` body: `{usernameOrEmail,newPassword,verificationCode}` 重置密码
+- `POST /api/auth/send-code` body: `{email}` 发送邮箱验证码
+示例：
+```json
+POST /api/auth/login
+{ "username": "user1", "password": "123456" }
+// 响应 data.token = "Bearer ..."
+```
+
+### 房间/匹配接口
+- `POST /api/game/rooms/random/join` 加入随机匹配池（可能立即匹配成功）
+- `POST /api/game/rooms/custom` body: `{roomName?}` 创建自定义房间
+- `POST /api/game/rooms/custom/join` body: `{roomCode}` 通过房间码加入
+- `POST /api/game/rooms/{roomId}/ready` body: `{ready:true|false}` 切换准备
+- `POST /api/game/rooms/{roomId}/start` 开始游戏
+- `GET /api/game/rooms/my` 查询我所在房间
+- `GET /api/game/rooms/{roomId}` 查询房间详情
+示例：
+```json
+POST /api/game/rooms/custom
+{ "roomName": "测试房间" }
+// 响应 data: { "roomId": "...", "roomCode": "123456" }
+
+POST /api/game/rooms/{roomId}/ready
+{ "ready": true }
+```
+
+### 用户战绩接口
+- `GET /api/game/user-stats/me` 当前用户累计战绩
+- `GET /api/game/user-stats/{userId}` 指定用户战绩
+- `GET /api/game/user-stats/leaderboard?page=1&size=20` 排行榜
+- `GET /api/game/user-stats/leaderboard/around-me?radius=5` 以当前用户为中心的排行榜片段
+- `POST /api/game/user-stats/batch` body: `{userIds:[1,2,3]}` 批量查询
+示例：
+```json
+GET /api/game/user-stats/me
+// 响应 data: { "score": 1020, "winCount": 12, "loseCount": 8, "level": 2, ... }
+
+GET /api/game/user-stats/leaderboard?page=1&size=3
+// 响应 data: [ { "userId":1,"score":1300 }, ... ]
+```
+
+### 用户资料接口
+- `GET /api/user/profile` 当前用户资料
+- `PUT /api/user/profile` body: `{nickname,gender,bio,...}` 更新资料
+- `PUT /api/user/email` body: `{oldEmail,newEmail,verificationCode}` 更新邮箱
+- `POST /api/user/avatar` form-data: `file` 上传头像
+示例：
+```json
+PUT /api/user/profile
+{ "nickname": "小明", "gender": 1, "bio": "hello" }
+```
+
+### 牌局内 WebSocket/STOMP
+- 握手：`/ws`（支持 SockJS），携带 `Authorization: Bearer <token>` 或 query `token=`.
+- 订阅：
+  - `/topic/rooms/{roomId}` 房间广播（发牌、回合开始、出牌、结果等）
+  - `/user/queue/room/{roomId}/cards` 下发手牌
+  - `/user/queue/room/{roomId}/snapshot` 快照返回
+  - `/user/queue/room/{roomId}/heartbeat` 心跳 ACK
+  - `/user/queue/errors` 错误提示（如“当前不是你的回合”）
+- 发送：
+  - `/app/room/{roomId}/snapshot` 请求快照
+  - `/app/room/{roomId}/heartbeat` 心跳
+  - `/app/room/{roomId}/surrender` 投降
+  - `/app/room/{roomId}/bid` body: `{callLandlord:true|false}`
+  - `/app/room/{roomId}/play` body: `{cards:["S3","H3"],pattern:"PAIR"}`
+  - `/app/room/{roomId}/pass` 不出
+示例发送：
+```
+CONNECT headers: Authorization=Bearer <token>
+SUBSCRIBE /topic/rooms/{roomId}
+SEND /app/room/{roomId}/bid  {"callLandlord":true}
+SEND /app/room/{roomId}/play {"cards":["S3","H3"],"pattern":"PAIR"}
+```
+
 ### GET /api/game/history/{matchId}
 - 作用：获取指定对局的详细信息（玩家结果 + 出牌流水）。
 - 路径参数：
