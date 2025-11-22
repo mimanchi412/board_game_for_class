@@ -36,6 +36,7 @@
         <input id="jwtToken" placeholder="登录后自动填充" size="70"/>
         <button onclick="copySavedToken()">读取本地 token</button>
         <button onclick="clearToken()">清除 token</button>
+        <button onclick="logout()">退出登录</button>
     </div>
 </fieldset>
 
@@ -48,6 +49,25 @@
     </div>
     <div>
         <small>登录成功后会将 token 写入 localStorage，并同步到下方房间/WS 区域。</small>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>用户战绩/历史</legend>
+    <div>
+        <button onclick="getMyStats()">我的战绩</button>
+        <input id="leaderboardPage" value="1" size="4"/>
+        <input id="leaderboardSize" value="10" size="4"/>
+        <button onclick="getLeaderboard()">排行榜</button>
+        <input id="aroundRadius" value="5" size="4"/>
+        <button onclick="getAroundMe()">附近排名</button>
+    </div>
+    <div>
+        <button onclick="getMyHistory()">我的对局列表</button>
+        <input id="historyPage" value="1" size="4"/>
+        <input id="historySize" value="20" size="4"/>
+        <input id="historyMatchId" placeholder="matchId" size="24"/>
+        <button onclick="getHistoryDetail()">对局详情</button>
     </div>
 </fieldset>
 
@@ -244,6 +264,27 @@
         }
     }
 
+    async function logout() {
+        try {
+            const base = document.getElementById('apiBase').value.trim();
+            const token = document.getElementById('jwtToken').value.trim();
+            if (!base || !token) {
+                alert('请先登录');
+                return;
+            }
+            await fetch(base + '/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+            clearToken();
+            log('已退出登录并清除 token');
+        } catch (e) {
+            log('退出登录失败: ' + e.message);
+        }
+    }
+
     function authHeaders() {
         const token = document.getElementById('jwtToken').value.trim();
         return token ? {'Authorization': 'Bearer ' + token} : {};
@@ -319,6 +360,61 @@
         } catch (e) {
             log('查询房间失败: ' + e.message);
             alert(e.message);
+        }
+    }
+
+    async function getMyStats() {
+        try {
+            const data = await callApi('/api/game/user-stats/me', {method: 'GET'});
+            log('我的战绩: ' + JSON.stringify(data));
+        } catch (e) {
+            log('获取我的战绩失败: ' + e.message);
+        }
+    }
+
+    async function getLeaderboard() {
+        try {
+            const page = document.getElementById('leaderboardPage').value || 1;
+            const size = document.getElementById('leaderboardSize').value || 10;
+            const data = await callApi(`/api/game/user-stats/leaderboard?page=${page}&size=${size}`, {method: 'GET'});
+            log('排行榜: ' + JSON.stringify(data));
+        } catch (e) {
+            log('获取排行榜失败: ' + e.message);
+        }
+    }
+
+    async function getAroundMe() {
+        try {
+            const radius = document.getElementById('aroundRadius').value || 5;
+            const data = await callApi(`/api/game/user-stats/leaderboard/around-me?radius=${radius}`, {method: 'GET'});
+            log('附近排名: ' + JSON.stringify(data));
+        } catch (e) {
+            log('获取附近排名失败: ' + e.message);
+        }
+    }
+
+    async function getMyHistory() {
+        try {
+            const page = document.getElementById('historyPage').value || 1;
+            const size = document.getElementById('historySize').value || 20;
+            const data = await callApi(`/api/game/history/my?page=${page}&size=${size}`, {method: 'GET'});
+            log('我的对局列表: ' + JSON.stringify(data));
+        } catch (e) {
+            log('获取对局列表失败: ' + e.message);
+        }
+    }
+
+    async function getHistoryDetail() {
+        try {
+            const matchId = document.getElementById('historyMatchId').value.trim();
+            if (!matchId) {
+                alert('请输入 matchId');
+                return;
+            }
+            const data = await callApi(`/api/game/history/${matchId}`, {method: 'GET'});
+            log('对局详情: ' + JSON.stringify(data));
+        } catch (e) {
+            log('获取对局详情失败: ' + e.message);
         }
     }
 
