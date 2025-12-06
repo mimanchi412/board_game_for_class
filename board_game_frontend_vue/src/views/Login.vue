@@ -32,12 +32,14 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { useUserStore } from '../stores/user'
 
 const router = useRouter();
 const loginFormRef = ref(null);
-const loading = ref(false);
+const userStore = useUserStore();
 
 // 登录表单数据
 const loginForm = reactive({
@@ -61,14 +63,20 @@ const loginRules = {
 const handleLogin = () => {
   loginFormRef.value.validate((valid) => {
     if (valid) {
-      loading.value = true;
-      // 这里将在后续集成axios后实现真正的登录逻辑
-      setTimeout(() => {
-        loading.value = false;
-        console.log('登录成功，用户名:', loginForm.username);
-        // 登录成功后跳转到首页
-        router.push('/');
-      }, 1000);
+      userStore.loading = true
+      // 调用后端登录接口
+      userStore.login(loginForm)
+        .then((response) => {
+          ElMessage.success('登录成功')
+          // 登录成功后跳转到首页
+          router.push('/')
+        })
+        .catch((error) => {
+          ElMessage.error(error.response?.data?.message || '登录失败，请稍后重试')
+        })
+        .finally(() => {
+          userStore.loading = false
+        })
     } else {
       console.log('表单验证失败');
       return false;

@@ -46,4 +46,12 @@ public interface UserService {
      * @return 头像数据，可为空
      */
     Optional<UserAvatarData> getAvatar();
+
+    /**
+     * 根据用户ID获取用户信息。
+     *
+     * @param userId 用户ID
+     * @return 用户信息响应
+     */
+    UserProfileResponse getUserById(Long userId);
 }

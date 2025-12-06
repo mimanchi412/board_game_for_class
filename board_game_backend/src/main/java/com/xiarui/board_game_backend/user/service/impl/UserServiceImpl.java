@@ -182,4 +182,13 @@ public class UserServiceImpl implements UserService {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         return HexFormat.of().formatHex(digest.digest(data));
     }
+
+    @Override
+    public UserProfileResponse getUserById(Long userId) {
+        UserAccount userAccount = userProfileMapper.selectById(userId);
+        if (userAccount == null) {
+            throw new RuntimeException("用户不存在");
+        }
+        return convertToResponse(userAccount);
+    }
 }

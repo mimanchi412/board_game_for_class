@@ -81,4 +81,13 @@ public class GameRoomController {
     public Result<GameRoomVO> getRoom(@PathVariable String roomId) {
         return Result.success(gameRoomService.getRoom(roomId));
     }
+    
+    /**
+     * 离开房间。
+     */
+    @PostMapping("/{roomId}/leave")
+    public Result<Void> leave(@PathVariable String roomId) {
+        gameRoomService.leaveRoom(roomId);
+        return Result.success("离开房间成功");
+    }
 }

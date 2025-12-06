@@ -322,4 +322,49 @@ public class GameRoomServiceImpl implements GameRoomService {
             stringRedisTemplate.opsForValue().set(RedisConstants.GAME_ROOM_USER_PREFIX + uid, room.getRoomId(), ttl);
         }
     }
+    
+    @Override
+    public void leaveRoom(String roomId) {
+        Long userId = getCurrentUserId();
+        try {
+            GameRoomInfo room = loadRoom(roomId);
+            
+            // 检查用户是否在房间中
+            if (!room.getMemberIds().contains(userId)) {
+                throw new RuntimeException("不在该房间中");
+            }
+            
+            // 从房间成员列表中移除用户
+            room.getMemberIds().remove(userId);
+            // 从准备状态映射中移除用户
+            room.getReadyMap().remove(userId);
+            
+            // 如果房间中没有成员了，删除房间
+            if (room.getMemberIds().isEmpty()) {
+                deleteRoom(room);
+            } else {
+                // 如果离开的是房主，重新选举房主
+                if (userId.equals(room.getOwnerId())) {
+                    room.setOwnerId(room.getMemberIds().get(0));
+                }
+                
+                // 更新房间状态
+                updateRoomStatus(room);
+                // 保存更新后的房间信息
+                saveRoom(room);
+            }
+        } finally {
+            // 无论是否发生异常，都移除用户与房间的绑定关系
+            stringRedisTemplate.delete(RedisConstants.GAME_ROOM_USER_PREFIX + userId);
+        }
+    }
+    
+    private void deleteRoom(GameRoomInfo room) {
+        // 删除房间信息
+        stringRedisTemplate.delete(RedisConstants.GAME_ROOM_INFO_PREFIX + room.getRoomId());
+        // 如果是自定义房间，删除房间码映射
+        if (StringUtils.hasText(room.getRoomCode())) {
+            stringRedisTemplate.delete(RedisConstants.GAME_ROOM_CODE_PREFIX + room.getRoomCode());
+        }
+    }
 }

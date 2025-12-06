@@ -65,4 +65,12 @@ public interface GameRoomService {
      * @return 房间信息
      */
     GameRoomVO getMyRoom();
+    
+    /**
+     * 离开房间。
+     *
+     * @param roomId 房间 ID
+     * @return 操作结果
+     */
+    void leaveRoom(String roomId);
 }

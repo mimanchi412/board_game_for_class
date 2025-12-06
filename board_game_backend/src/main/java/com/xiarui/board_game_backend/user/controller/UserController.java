@@ -68,6 +68,17 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * 根据用户ID获取用户信息。
+     *
+     * @param userId 用户ID
+     * @return 用户信息响应
+     */
+    @GetMapping("/info/{userId}")
+    public ResponseEntity<UserProfileResponse> getUserInfo(@PathVariable Long userId) {
+        return ResponseEntity.ok(userService.getUserById(userId));
+    }
+
     private ResponseEntity<byte[]> buildAvatarResponse(UserAvatarData avatarData) {
         MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
         if (avatarData.getContentType() != null) {

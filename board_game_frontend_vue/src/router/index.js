@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useUserStore } from '../stores/user';
 
 // 定义路由组件
 // 注意：这里使用动态导入，实现路由懒加载
@@ -26,7 +27,8 @@ const router = createRouter({
       name: 'login',
       component: Login,
       meta: {
-        title: '登录'
+        title: '登录',
+        requiresAuth: false // 不需要登录
       }
     },
     {
@@ -34,7 +36,8 @@ const router = createRouter({
       name: 'register',
       component: Register,
       meta: {
-        title: '注册'
+        title: '注册',
+        requiresAuth: false // 不需要登录
       }
     },
     {
@@ -42,7 +45,8 @@ const router = createRouter({
       name: 'gameRoom',
       component: GameRoom,
       meta: {
-        title: '游戏房间'
+        title: '游戏房间',
+        requiresAuth: true // 需要登录
       },
       // 动态路由参数，roomId用于标识不同的游戏房间
       props: true
@@ -55,12 +59,32 @@ const router = createRouter({
   ]
 });
 
-// 路由守卫，用于设置页面标题
+// 路由守卫，用于设置页面标题和检查登录状态
 router.beforeEach((to, from, next) => {
+  const userStore = useUserStore();
+  
+  // 设置页面标题
   if (to.meta.title) {
-    document.title = `${to.meta.title} - 桌游平台`;
+    document.title = `${to.meta.title} - 斗地主`;
   }
-  next();
+  
+  // 已登录用户不允许访问登录或注册页面
+  if (userStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
+    next('/'); // 重定向到首页
+    return;
+  }
+  
+  // 检查是否需要登录
+  if (to.meta.requiresAuth) {
+    if (userStore.isAuthenticated) {
+      next(); // 已登录，继续访问
+    } else {
+      next('/login'); // 未登录，跳转到登录页面
+    }
+  } else {
+    // 不需要登录的页面，直接访问
+    next();
+  }
 });
 
 export default router;

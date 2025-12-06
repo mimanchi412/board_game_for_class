@@ -16,7 +16,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/board_game_db
     username: postgres
-    password: 191599
+    password: 123456
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
