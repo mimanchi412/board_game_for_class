@@ -7,6 +7,7 @@ const Home = () => import('../views/Home.vue');
 const Login = () => import('../views/Login.vue');
 const Register = () => import('../views/Register.vue');
 const GameRoom = () => import('../views/GameRoom.vue');
+const GamePlay = () => import('../views/GamePlay.vue');
 
 // 创建路由实例
 const router = createRouter({
@@ -51,6 +52,17 @@ const router = createRouter({
       // 动态路由参数，roomId用于标识不同的游戏房间
       props: true
     },
+    {
+      path: '/game-play/:roomId',
+      name: 'gamePlay',
+      component: GamePlay,
+      meta: {
+        title: '斗地主游戏',
+        requiresAuth: true // 需要登录
+      },
+      // 动态路由参数，roomId用于标识不同的游戏房间
+      props: true
+    },
     // 404页面配置
     {
       path: '/:pathMatch(.*)*',
@@ -84,6 +96,27 @@ router.beforeEach((to, from, next) => {
   } else {
     // 不需要登录的页面，直接访问
     next();
+  }
+});
+
+// 路由后置守卫，用于处理用户离开房间页面时的自动退出
+router.afterEach((to, from) => {
+  // 当用户从游戏房间或游戏页面离开时，尝试自动退出房间
+  if ((from.path.startsWith('/game-room/') || from.path.startsWith('/game-play/')) && 
+      !(to.path.startsWith('/game-room/') || to.path.startsWith('/game-play/'))) {
+    const roomId = from.params.roomId;
+    if (roomId) {
+      // 尝试自动退出房间
+      try {
+        import('../utils/axios').then(({ default: axios }) => {
+          axios.post(`/game/room/leave/${roomId}`).catch(() => {
+            // 忽略退出失败的情况
+          });
+        });
+      } catch (error) {
+        // 忽略任何错误
+      }
+    }
   }
 });
 

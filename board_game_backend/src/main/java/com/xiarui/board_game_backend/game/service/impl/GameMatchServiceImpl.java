@@ -371,6 +371,12 @@ public class GameMatchServiceImpl implements GameMatchService {
         Long next = nextActiveUser(state, userId);
         state.setCurrentTurnUserId(next);
         state.setTurnDeadlineEpochMillis(nextDeadline());
+        
+        // 如果下一个玩家是上一手牌的出牌者，说明所有其他玩家都Pass了，此时重置lastPlay，让原出牌者可以自由出牌
+        if (state.getLastPlay() != null && next.equals(state.getLastPlay().getUserId())) {
+            state.setLastPlay(null);
+        }
+        
         persistState(state);
         messagingTemplate.convertAndSend(roomTopic(roomId),
                 GameEventMessage.of(GameEventType.PASS, Map.of("roomId", roomId, "userId", userId)));
@@ -387,6 +393,60 @@ public class GameMatchServiceImpl implements GameMatchService {
             return objectMapper.readValue(json, GameMatchState.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("牌局状态解析失败", e);
+        }
+    }
+
+    @Override
+    public void removePlayerFromMatch(String roomId, Long userId) {
+        try {
+            GameMatchState state = getState(roomId);
+            if (state == null) {
+                return; // 没有游戏状态，无需处理
+            }
+
+            // 从玩家列表中移除指定用户（添加null检查）
+            state.getPlayers().removeIf(player -> player != null && player.getUserId() != null && player.getUserId().equals(userId));
+            
+            // 从座位顺序中移除
+            state.getSeatOrder().remove(userId);
+            
+            // 从其他映射中移除
+            state.getBidMap().remove(userId);
+            state.getRobMap().remove(userId);
+            state.getOfflineTimeoutCount().remove(userId);
+            
+            // 如果当前回合是该玩家，重置当前回合
+            if (userId != null && userId.equals(state.getCurrentTurnUserId())) {
+                state.setCurrentTurnUserId(null);
+            }
+            
+            // 如果地主是该玩家，重置地主
+            if (userId != null && userId.equals(state.getLandlordId())) {
+                state.setLandlordId(null);
+            }
+            
+            // 如果没有玩家了，删除整个游戏匹配状态
+            if (state.getPlayers().isEmpty()) {
+                stringRedisTemplate.delete(RedisConstants.GAME_MATCH_STATE_PREFIX + roomId);
+            } else {
+                // 更新时间戳
+                state.setUpdatedAt(Instant.now());
+                // 保存更新后的状态
+                String json = objectMapper.writeValueAsString(state);
+                stringRedisTemplate.opsForValue().set(
+                        RedisConstants.GAME_MATCH_STATE_PREFIX + roomId,
+                        json,
+                        Duration.ofSeconds(gameSettings.getMatchState().getActiveTtlSeconds())
+                );
+            }
+        } catch (JsonProcessingException e) {
+            log.error("Failed to remove player from match: {}", e.getMessage(), e);
+        } catch (IllegalStateException e) {
+            // 如果getState抛出异常（房间不存在牌局），直接返回
+            log.debug("No match state found for room: {}", roomId);
+        } catch (Exception e) {
+            // 捕获所有其他异常，确保清理操作不会中断
+            log.error("Unexpected error removing player from match: {}", e.getMessage(), e);
         }
     }
 

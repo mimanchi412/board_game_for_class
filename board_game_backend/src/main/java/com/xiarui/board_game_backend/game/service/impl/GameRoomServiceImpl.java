@@ -339,6 +339,9 @@ public class GameRoomServiceImpl implements GameRoomService {
             // 从准备状态映射中移除用户
             room.getReadyMap().remove(userId);
             
+            // 从游戏匹配状态中移除用户
+            gameMatchService.removePlayerFromMatch(roomId, userId);
+            
             // 如果房间中没有成员了，删除房间
             if (room.getMemberIds().isEmpty()) {
                 deleteRoom(room);
@@ -353,6 +356,14 @@ public class GameRoomServiceImpl implements GameRoomService {
                 // 保存更新后的房间信息
                 saveRoom(room);
             }
+        } catch (Exception e) {
+            log.error("Failed to leave room: {}", e.getMessage(), e);
+            // 即使发生异常，也要尝试清理游戏匹配状态
+            try {
+                gameMatchService.removePlayerFromMatch(roomId, userId);
+            } catch (Exception ex) {
+                log.error("Failed to remove player from match during error handling: {}", ex.getMessage(), ex);
+            }
         } finally {
             // 无论是否发生异常，都移除用户与房间的绑定关系
             stringRedisTemplate.delete(RedisConstants.GAME_ROOM_USER_PREFIX + userId);
@@ -366,5 +377,7 @@ public class GameRoomServiceImpl implements GameRoomService {
         if (StringUtils.hasText(room.getRoomCode())) {
             stringRedisTemplate.delete(RedisConstants.GAME_ROOM_CODE_PREFIX + room.getRoomCode());
         }
+        // 删除游戏匹配状态
+        stringRedisTemplate.delete(RedisConstants.GAME_MATCH_STATE_PREFIX + room.getRoomId());
     }
 }

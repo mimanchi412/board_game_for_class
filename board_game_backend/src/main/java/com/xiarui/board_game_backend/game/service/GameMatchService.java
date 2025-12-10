@@ -85,4 +85,12 @@ public interface GameMatchService {
      * @return 牌局状态
      */
     GameMatchState getState(String roomId);
+    
+    /**
+     * 将玩家从牌局中移除。
+     *
+     * @param roomId 房间 ID
+     * @param userId 用户 ID
+     */
+    void removePlayerFromMatch(String roomId, Long userId);
 }

@@ -1,3 +1,8 @@
+// 为浏览器环境提供Node.js global对象的兼容
+if (typeof global === 'undefined') {
+  window.global = window;
+}
+
 import './assets/main.css'
 
 // 引入Element Plus样式

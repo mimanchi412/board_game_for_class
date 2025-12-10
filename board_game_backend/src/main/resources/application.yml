@@ -96,7 +96,7 @@ mq:
 
 game:
   timeout:
-    turn-seconds: 20       # 每回合操作超时时长
+    turn-seconds: 30       # 每回合操作超时时长
     heartbeat-seconds: 30  # 心跳 TTL
     heartbeat-buffer-seconds: 10 # 心跳缓冲
   penalty:

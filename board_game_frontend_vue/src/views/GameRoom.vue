@@ -295,8 +295,8 @@ const fetchRoomInfo = async () => {
     
     // 如果游戏已开始，跳转到游戏界面
     if (roomInfo.value.isGameStarted) {
-      // 这里可以跳转到游戏界面，暂时先不实现
-      // router.push(`/game-play/${roomId.value}`);
+      // 跳转到游戏界面
+      router.push(`/game-play/${roomId.value}`);
     }
   } catch (error) {
     ElMessage.error('获取房间信息失败：' + error.response?.data?.message || '网络错误');
@@ -384,6 +384,18 @@ const quickStart = async () => {
 // 定义定时器变量
 let roomInfoTimer = null;
 
+// 监听游戏开始状态变化
+watch(
+  () => roomInfo.value.isGameStarted,
+  (newVal) => {
+    if (newVal) {
+      console.log('游戏已开始，导航到游戏界面');
+      router.push(`/game-play/${roomId.value}`);
+    }
+  },
+  { immediate: true }
+);
+
 // 组件挂载时获取房间信息
 onMounted(async () => {
   // 调试用户认证状态
@@ -429,20 +441,20 @@ onMounted(async () => {
       // 自动准备
       if (!isReady.value) {
         await toggleReady();
-        // 延迟一下确保准备状态已更新
-        setTimeout(async () => {
-          // 自动开始游戏
-          await startGame();
-        }, 500);
-      } else {
-        // 已经准备好则直接开始游戏
-        await startGame();
       }
+      // 自动开始游戏
+      await startGame();
     }, 1000);
   }
   
-  // 定时刷新房间信息
-  roomInfoTimer = setInterval(fetchRoomInfo, 5000);
+  // 设置定时器定期刷新房间信息
+  roomInfoTimer = setInterval(async () => {
+    try {
+      await fetchRoomInfo();
+    } catch (error) {
+      console.error('定时刷新房间信息失败:', error);
+    }
+  }, 1000);
 });
 
 // 组件卸载时清除定时器

@@ -16,7 +16,7 @@ public class GameSettingsProperties {
 
     @Data
     public static class Timeout {
-        private long turnSeconds = 20;
+        private long turnSeconds = 30;
         private long heartbeatSeconds = 30;
         private long heartbeatBufferSeconds = 10;
     }
