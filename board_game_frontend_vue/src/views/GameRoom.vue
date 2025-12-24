@@ -1,76 +1,106 @@
 <template>
   <div class="game-room-container">
-    <div class="room-header">
-      <h2>游戏房间</h2>
-      <div class="room-info">
-        <span>房间ID: {{ roomInfo.roomId || '加载中...' }}</span>
-        <span class="room-code">房间码: {{ roomInfo.roomCode || '加载中...' }}</span>
-        <el-button type="danger" @click="leaveRoom">退出房间</el-button>
+    <div class="glass-card">
+      <div class="room-header">
+        <div class="header-info">
+          <h2>游戏大厅</h2>
+          <div class="room-tags">
+            <el-tag effect="plain" round>ID: {{ roomInfo.roomId || '...' }}</el-tag>
+            <el-tag type="success" effect="dark" round size="large" class="code-tag">
+              房间码: {{ roomInfo.roomCode || '...' }}
+            </el-tag>
+          </div>
+        </div>
+        <el-button type="danger" plain :icon="SwitchButton" @click="leaveRoom" circle title="退出房间" />
       </div>
-    </div>
     
-    <div class="room-content">
-      <!-- 房间成员列表 -->
-      <div class="members-section">
-        <h3>房间成员</h3>
-        <div class="members-list">
-          <div 
-            v-for="memberId in roomInfo.memberIds" 
-            :key="memberId"
-            class="member-item"
-            :class="{ 
-              'is-host': memberId === roomInfo.ownerId, 
-              'is-ready': roomInfo.readyMap[memberId] 
-            }"
-          >
-            <div class="member-avatar">{{ getUserInitials(memberId) }}</div>
-            <div class="member-info">
-              <div class="member-name">{{ getUsername(memberId) }}</div>
-              <div class="member-status">
-                <span v-if="memberId === roomInfo.ownerId" class="host-tag">房主</span>
-                <span v-if="roomInfo.readyMap[memberId]" class="ready-tag">已准备</span>
-                <span v-else class="not-ready-tag">未准备</span>
+      <div class="room-content">
+        <!-- 房间成员列表 -->
+        <div class="section-panel members-panel">
+          <div class="panel-header">
+            <h3><el-icon><User /></el-icon> 玩家列表 ({{ roomInfo.memberIds?.length || 0 }})</h3>
+          </div>
+          <div class="members-list">
+            <div 
+              v-for="memberId in roomInfo.memberIds" 
+              :key="memberId"
+              class="member-card"
+              :class="{ 
+                'is-host': memberId === roomInfo.ownerId, 
+                'is-ready': roomInfo.readyMap[memberId],
+                'is-self': String(memberId) === String(userStore.userInfo?.id)
+              }"
+            >
+              <div class="avatar-wrapper">
+                <el-avatar :size="48" class="member-avatar">
+                  {{ getUserInitials(memberId) }}
+                </el-avatar>
+                <div v-if="roomInfo.readyMap[memberId]" class="ready-badge"><el-icon><Select /></el-icon></div>
+              </div>
+              
+              <div class="member-info">
+                <div class="member-name">
+                  {{ getUsername(memberId) }}
+                  <el-icon v-if="memberId === roomInfo.ownerId" class="host-icon" title="房主"><Trophy /></el-icon>
+                </div>
+                <div class="member-status-text">
+                  {{ roomInfo.readyMap[memberId] ? '已准备' : '等待中' }}
+                </div>
               </div>
             </div>
           </div>
         </div>
+      
+        <!-- 游戏控制区 -->
+        <div class="section-panel controls-panel">
+          <div class="panel-header">
+            <h3><el-icon><VideoPlay /></el-icon> 操作控制</h3>
+          </div>
+          
+          <div class="control-buttons">
+            <el-button 
+              :type="isReady ? 'warning' : 'primary'" 
+              size="large"
+              @click="toggleReady" 
+              :loading="loading"
+              :disabled="roomInfo.isGameStarted"
+              class="main-btn"
+              :icon="isReady ? CloseBold : Select"
+            >
+              {{ isReady ? '取消准备' : '准备就绪' }}
+            </el-button>
+            
+            <el-button 
+              type="success" 
+              size="large"
+              @click="startGame" 
+              :loading="loading"
+              :disabled="!isHost || !allMembersReady || roomInfo.isGameStarted"
+              class="main-btn"
+              :icon="VideoPlay"
+            >
+              开始游戏
+            </el-button>
+          </div>
+          
+          <!-- 快速开始按钮 -->
+          <div class="quick-start-box" v-if="!roomInfo.isGameStarted">
+            <p>等待太久？尝试匹配其他玩家</p>
+            <el-button text bg type="info" @click="quickStart">快速匹配</el-button>
+          </div>
+        </div>
       </div>
       
-      <!-- 游戏控制区 -->
-      <div class="game-controls">
-        <div class="control-buttons">
-          <el-button 
-            type="primary" 
-            @click="toggleReady" 
-            :loading="loading"
-            :disabled="roomInfo.isGameStarted"
-          >
-            {{ isReady ? '取消准备' : '准备' }}
-          </el-button>
-          
-          <el-button 
-            type="success" 
-            @click="startGame" 
-            :loading="loading"
-            :disabled="!isHost || !allMembersReady || roomInfo.isGameStarted"
-          >
-            开始游戏
-          </el-button>
-        </div>
-        
-        <!-- 快速开始按钮 -->
-        <div class="quick-start-section" v-if="!roomInfo.isGameStarted">
-          <h3>快速开始</h3>
-          <el-button type="warning" @click="quickStart">立即开始游戏</el-button>
-          <p>系统将为您匹配其他玩家</p>
-        </div>
+      <!-- 游戏状态显示 -->
+      <div class="game-status-bar" v-if="roomInfo.isGameStarted">
+        <el-alert
+          title="游戏已开始，正在进入战场..."
+          type="success"
+          center
+          show-icon
+          :closable="false"
+        />
       </div>
-    </div>
-    
-    <!-- 游戏状态显示 -->
-    <div class="game-status" v-if="roomInfo.isGameStarted">
-      <h3>游戏已开始</h3>
-      <p>正在加载游戏界面...</p>
     </div>
   </div>
 </template>
@@ -106,6 +136,7 @@ const getUserInitials = (userId) => {
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '../stores/user';
 import { ElMessage } from 'element-plus';
+import { User, SwitchButton, Select, CloseBold, VideoPlay, Trophy } from '@element-plus/icons-vue';
 import axios from '../utils/axios';
 
 const route = useRoute();
@@ -455,180 +486,198 @@ onUnmounted(() => {
 
 <style scoped>
 .game-room-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-  background-color: #f5f7fa;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 30px;
+  width: 100%;
+  max-width: 900px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
 }
 
 .room-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e4e7ed;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.room-header h2 {
-  color: #333;
+.header-info h2 {
   margin: 0;
+  color: #333;
+  font-size: 24px;
+  margin-bottom: 10px;
 }
 
-.room-info {
+.room-tags {
   display: flex;
-  align-items: center;
   gap: 1rem;
+  align-items: center;
 }
 
-.room-info span {
-  font-size: 1.1rem;
+.code-tag {
   font-weight: bold;
-  color: #606266;
-  margin-right: 1.5rem;
-}
-
-.room-info .room-code {
-  color: #67c23a;
-  background-color: #f0f9eb;
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
+  letter-spacing: 1px;
 }
 
 .room-content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
 }
 
-.members-section, .game-controls {
-  background-color: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+.section-panel {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
-.members-section h3, .game-controls h3 {
-  margin-bottom: 1rem;
+.panel-header h3 {
+  margin: 0 0 20px;
   color: #333;
-  font-size: 1.2rem;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .members-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 12px;
 }
 
-.member-item {
+.member-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
+  gap: 15px;
+  padding: 12px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   transition: all 0.3s ease;
+  border: 1px solid transparent;
 }
 
-.member-item:hover {
-  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.1);
+.member-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.member-item.is-host {
-  border-color: #409eff;
-  background-color: #ecf5ff;
+.member-card.is-self {
+  border-color: #a0cfff;
 }
 
-.member-item.is-ready {
-  border-color: #67c23a;
-  background-color: #f0f9eb;
+.member-card.is-ready {
+  background: #f0f9eb;
+  border-color: #e1f3d8;
+}
+
+.avatar-wrapper {
+  position: relative;
 }
 
 .member-avatar {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: #409eff;
+  background: #667eea;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.ready-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  background: #67c23a;
   color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  font-weight: bold;
+  font-size: 12px;
+  border: 2px solid white;
 }
 
 .member-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .member-name {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: bold;
   color: #333;
-  margin-bottom: 0.25rem;
-}
-
-.member-status {
   display: flex;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  align-items: center;
+  gap: 6px;
 }
 
-.host-tag {
-  color: #409eff;
-  font-weight: bold;
+.host-icon {
+  color: #e6a23c;
 }
 
-.ready-tag {
-  color: #67c23a;
-  font-weight: bold;
-}
-
-.not-ready-tag {
+.member-status-text {
+  font-size: 12px;
   color: #909399;
+  margin-top: 4px;
 }
 
 .control-buttons {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 25px;
 }
 
-.quick-start-section {
+.main-btn {
+  width: 100%;
+  margin-left: 0 !important;
+  height: 44px;
+}
+
+.quick-start-box {
   text-align: center;
-  padding: 1rem;
-  background-color: #fafafa;
-  border-radius: 6px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.quick-start-section h3 {
-  margin-bottom: 1rem;
-}
-
-.quick-start-section p {
-  margin-top: 0.5rem;
+.quick-start-box p {
+  margin: 0 0 10px;
   color: #909399;
-  font-size: 0.9rem;
+  font-size: 12px;
 }
 
-.game-status {
-  margin-top: 2rem;
-  padding: 1.5rem;
-  background-color: #f0f9eb;
-  border: 1px solid #67c23a;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.game-status h3 {
-  color: #67c23a;
-  margin-bottom: 0.5rem;
+.game-status-bar {
+  margin-top: 20px;
 }
 
 @media (max-width: 768px) {
   .room-content {
     grid-template-columns: 1fr;
+  }
+  
+  .glass-card {
+    padding: 20px;
   }
 }
 </style>

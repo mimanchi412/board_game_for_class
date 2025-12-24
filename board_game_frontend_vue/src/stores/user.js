@@ -157,7 +157,32 @@ export const useUserStore = defineStore('user', {
         console.error('获取用户信息失败:', error);
         // 如果获取用户信息失败，可能是token过期，清除token
         this.clearToken();
-        throw error;
+        throw error instanceof Error ? error : new Error(error);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    // 更新个人资料
+    async updateProfile(profileData) {
+      try {
+        this.loading = true;
+        const payload = {
+          nickname: profileData.nickname,
+          gender: profileData.gender,
+          bio: profileData.bio || null,
+          birthday: profileData.birthday || null,
+          region: profileData.region || null
+        };
+        const response = await axios.put('/api/user/profile', payload);
+        if (response && response.code === 200) {
+          this.userInfo = response.data;
+          return response.data;
+        }
+        throw new Error(response?.message || '更新个人资料失败');
+      } catch (error) {
+        console.error('更新个人资料失败:', error);
+        throw error instanceof Error ? error : new Error(error);
       } finally {
         this.loading = false;
       }

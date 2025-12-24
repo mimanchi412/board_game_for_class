@@ -1,33 +1,33 @@
 <template>
   <div class="game-play-container">
     <div class="game-header">
-      <h2>3人斗地主</h2>
-      <div class="game-info">
-        <span class="room-code">房间号: {{ gameInfo.roomCode }}</span>
-        <span class="game-status">{{ gameStatusText }}</span>
+      <div class="header-left">
+        <el-button link :icon="ArrowLeft" @click="exitRoom" class="back-btn">退出</el-button>
+        <h2>3人斗地主</h2>
+      </div>
+      <div class="header-right">
+        <el-tag effect="dark" type="success" round class="info-tag">房间: {{ gameInfo.roomCode }}</el-tag>
+        <el-tag effect="light" round class="info-tag">{{ gameStatusText }}</el-tag>
       </div>
     </div>
 
     <div class="game-main">
-      <!-- 地主信息 -->
-      <div class="landlord-info" v-if="gameInfo.landlordId">
-        <span>地主: {{ getPlayerName(gameInfo.landlordId) }}</span>
-      </div>
-
       <!-- 顶部玩家区域 -->
       <div class="player-area top-player" v-if="otherPlayers[0]">
         <div class="player-info">
-          <div class="player-name">{{ getPlayerName(otherPlayers[0]?.userId) }}</div>
-          <div class="player-status">
-            <span v-if="otherPlayers[0]?.userId === gameInfo.landlordId" class="landlord-tag">地主</span>
-            <span class="card-count">剩余: {{ otherPlayers[0]?.handCards?.length || 0 }}</span>
+          <div class="avatar-wrapper">
+            <el-avatar :size="48" class="player-avatar">{{ getAvatarText(otherPlayers[0]?.userId) }}</el-avatar>
+            <div v-if="otherPlayers[0]?.userId === gameInfo.landlordId" class="role-badge landlord">地主</div>
+          </div>
+          <div class="player-detail">
+            <div class="player-name">{{ getPlayerName(otherPlayers[0]?.userId) }}</div>
+            <el-tag size="small" effect="dark" type="info" round>剩余 {{ otherPlayers[0]?.handCards?.length || 0 }} 张</el-tag>
           </div>
         </div>
         <div class="player-cards">
           <div class="card back" v-for="n in otherPlayers[0]?.handCards?.length" :key="`top-${n}`"></div>
         </div>
         <div class="last-played" v-if="lastPlayedCards && lastPlayedPlayerId === otherPlayers[0]?.userId">
-          <div class="last-played-label">刚刚出:</div>
           <div class="last-played-cards">
             <div class="card" v-for="card in lastPlayedCards" :key="`last-top-${card}`" :class="cardClass(card)">
               {{ cardName(card) }}
@@ -40,7 +40,7 @@
       <div class="game-center">
         <!-- 地主牌 -->
         <div class="landlord-cards" v-if="gameInfo.landlordCards && gameInfo.landlordCards.length > 0">
-          <div class="landlord-cards-label">地主牌:</div>
+          <div class="landlord-cards-label">地主牌</div>
           <div class="landlord-cards-list">
             <div class="card" v-for="card in gameInfo.landlordCards" :key="`landlord-${card}`" :class="cardClass(card)">
               {{ cardName(card) }}
@@ -49,15 +49,17 @@
         </div>
 
         <!-- 游戏状态提示 -->
-        <div class="game-message">
-          {{ gameMessage }}
+        <div class="game-message-container" v-if="gameMessage">
+          <div class="game-message">{{ gameMessage }}</div>
         </div>
 
         <!-- 当前玩家操作提示 -->
         <div class="current-turn" v-if="gameInfo.currentTurnId">
-          {{ gameInfo.currentTurnId === userStore.userInfo?.id ? '轮到你出牌' : `轮到${getPlayerName(gameInfo.currentTurnId)}出牌` }}
-          <div class="countdown">
-            剩余时间: {{ remainingTime }}秒
+          <div class="turn-text">
+            {{ gameInfo.currentTurnId === userStore.userInfo?.id ? '轮到你出牌' : `等待 ${getPlayerName(gameInfo.currentTurnId)} 出牌` }}
+          </div>
+          <div class="countdown" :class="{ 'urgent': remainingTime <= 5 }">
+            <el-icon><Timer /></el-icon> {{ remainingTime }}s
           </div>
         </div>
       </div>
@@ -65,10 +67,13 @@
       <!-- 左侧玩家区域 -->
       <div class="player-area left-player" v-if="otherPlayers[1]">
         <div class="player-info">
-          <div class="player-name">{{ getPlayerName(otherPlayers[1]?.userId) }}</div>
-          <div class="player-status">
-            <span v-if="otherPlayers[1]?.userId === gameInfo.landlordId" class="landlord-tag">地主</span>
-            <span class="card-count">剩余: {{ otherPlayers[1]?.handCards?.length || 0 }}</span>
+          <div class="avatar-wrapper">
+            <el-avatar :size="48" class="player-avatar">{{ getAvatarText(otherPlayers[1]?.userId) }}</el-avatar>
+            <div v-if="otherPlayers[1]?.userId === gameInfo.landlordId" class="role-badge landlord">地主</div>
+          </div>
+          <div class="player-detail">
+            <div class="player-name">{{ getPlayerName(otherPlayers[1]?.userId) }}</div>
+            <el-tag size="small" effect="dark" type="info" round>剩余 {{ otherPlayers[1]?.handCards?.length || 0 }} 张</el-tag>
           </div>
         </div>
         <div class="player-cards">
@@ -87,10 +92,13 @@
       <!-- 右侧玩家区域（通常不会显示，仅作备用） -->
       <div class="player-area right-player" v-if="otherPlayers[2]">
         <div class="player-info">
-          <div class="player-name">{{ getPlayerName(otherPlayers[2]?.userId) }}</div>
-          <div class="player-status">
-            <span v-if="otherPlayers[2]?.userId === gameInfo.landlordId" class="landlord-tag">地主</span>
-            <span class="card-count">剩余: {{ otherPlayers[2]?.handCards?.length || 0 }}</span>
+          <div class="avatar-wrapper">
+            <el-avatar :size="48" class="player-avatar">{{ getAvatarText(otherPlayers[2]?.userId) }}</el-avatar>
+            <div v-if="otherPlayers[2]?.userId === gameInfo.landlordId" class="role-badge landlord">地主</div>
+          </div>
+          <div class="player-detail">
+            <div class="player-name">{{ getPlayerName(otherPlayers[2]?.userId) }}</div>
+            <el-tag size="small" effect="dark" type="info" round>剩余 {{ otherPlayers[2]?.handCards?.length || 0 }} 张</el-tag>
           </div>
         </div>
         <div class="player-cards">
@@ -108,13 +116,6 @@
 
       <!-- 底部玩家区域（当前用户） -->
       <div class="player-area bottom-player">
-        <div class="player-info">
-          <div class="player-name">{{ getPlayerName(userStore.userInfo?.id) }} (我)</div>
-          <div class="player-status">
-            <span v-if="userStore.userInfo?.id === gameInfo.landlordId" class="landlord-tag">地主</span>
-            <span class="card-count">剩余: {{ myHandCards?.length || 0 }}</span>
-          </div>
-        </div>
         <div class="my-cards">
           <div 
             class="card" 
@@ -126,6 +127,13 @@
             {{ cardName(card) }}
           </div>
         </div>
+        <div class="player-info self-info">
+          <div class="avatar-wrapper">
+            <el-avatar :size="56" class="player-avatar self">{{ getAvatarText(userStore.userInfo?.id) }}</el-avatar>
+            <div v-if="userStore.userInfo?.id === gameInfo.landlordId" class="role-badge landlord">地主</div>
+          </div>
+          <div class="player-name">我</div>
+        </div>
       </div>
     </div>
 
@@ -133,67 +141,94 @@
     <div class="action-buttons">
       <!-- 叫地主阶段按钮 -->
       <template v-if="gameInfo.status === 'BIDDING' && gameInfo.currentTurnId === userStore.userInfo?.id">
-        <button 
-          class="btn btn-primary"
+        <el-button 
+          type="primary"
+          size="large"
+          round
           @click="bidLandlord(1)"
         >
           叫地主
-        </button>
-        <button 
-          class="btn btn-secondary"
+        </el-button>
+        <el-button 
+          type="info"
+          size="large"
+          round
           @click="bidLandlord(0)"
         >
           不叫
-        </button>
+        </el-button>
       </template>
       
       <!-- 游戏进行中按钮 -->
       <template v-else-if="gameInfo.status === 'PLAYING'">
-        <button 
-          class="btn btn-primary"
+        <el-button 
+          type="primary"
+          size="large"
+          round
           @click="playCards"
           :disabled="gameInfo.currentTurnId !== userStore.userInfo?.id || selectedCards.length === 0"
         >
           出牌
-        </button>
-        <button 
-          class="btn btn-secondary"
+        </el-button>
+        <el-button 
+          type="info"
+          size="large"
+          round
           @click="passCards"
           :disabled="gameInfo.currentTurnId !== userStore.userInfo?.id"
         >
           不出
-        </button>
-        <button 
-          class="btn btn-danger"
+        </el-button>
+        <el-button 
+          type="danger"
+          size="large"
+          round
+          plain
           @click="surrender"
           :disabled="gameInfo.currentTurnId !== userStore.userInfo?.id"
         >
           投降
-        </button>
+        </el-button>
       </template>
       
       <!-- 游戏等待中 -->
       <template v-else>
-        <button 
-          class="btn btn-primary"
+        <el-button 
+          type="info"
+          size="large"
+          round
           disabled
         >
           {{ gameStatusText }}
-        </button>
+        </el-button>
       </template>
     </div>
 
     <!-- 游戏结束提示 -->
-    <div class="game-over" v-if="gameInfo.status === 'ENDED'">
-      <div class="game-over-content">
+    <el-dialog
+      v-model="showGameOver"
+      title="游戏结束"
+      width="360px"
+      center
+      :show-close="false"
+      :close-on-click-modal="false"
+      class="game-over-dialog"
+    >
+      <div class="game-result-content">
+        <el-icon :size="60" :color="isWinner ? '#67C23A' : '#909399'">
+          <Trophy v-if="isWinner" />
+          <CircleClose v-else />
+        </el-icon>
         <h3>{{ gameResult }}</h3>
-        <div class="game-over-buttons">
-          <button class="btn btn-primary" @click="playAgain">再来一局</button>
-          <button class="btn btn-secondary" @click="returnToRoom">返回房间</button>
-          <button class="btn btn-danger" @click="exitRoom">退出房间</button>
-        </div>
       </div>
-    </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" @click="playAgain">再来一局</el-button>
+          <el-button @click="returnToRoom">返回房间</el-button>
+          <el-button type="danger" plain @click="exitRoom">退出</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -204,6 +239,7 @@ import { useUserStore } from '../stores/user';
 import webSocketService from '../utils/websocket';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
+import { ArrowLeft, Timer, Trophy, CircleClose, SwitchButton } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -482,6 +518,12 @@ const otherPlayers = computed(() => {
   return others.slice(0, 2);
 });
 
+// 辅助函数：获取头像文字
+const getAvatarText = (userId) => {
+  const name = getPlayerName(userId);
+  return name ? name.charAt(0).toUpperCase() : '?';
+};
+
 // 计算属性：游戏状态文本
 const gameStatusText = computed(() => {
   const statusMap = {
@@ -492,18 +534,23 @@ const gameStatusText = computed(() => {
   return statusMap[gameInfo.value.status] || gameInfo.value.status;
 });
 
+// 计算属性：是否获胜
+const isWinner = computed(() => {
+  return String(gameInfo.value.winnerId) === String(userStore.userInfo?.id);
+});
+
 // 计算属性：游戏结果
 const gameResult = computed(() => {
   if (gameInfo.value.status !== 'ENDED') return '';
-  
-  // 这里需要根据游戏结果判断胜负
-  // 假设后端会返回winnerId或类似字段
-  if (String(gameInfo.value.winnerId) === String(userStore.userInfo?.id)) {
+  if (isWinner.value) {
     return '恭喜你，获胜了！';
   } else {
     return '很遗憾，游戏失败！';
   }
 });
+
+// 游戏结束弹窗控制
+const showGameOver = computed(() => gameInfo.value.status === 'ENDED');
 
 // 获取游戏信息功能已通过WebSocket实现
 
@@ -1447,11 +1494,14 @@ const handleGameEvent = (data) => {
 
 <style scoped>
 .game-play-container {
+  position: fixed;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-  background-color: #2c6e49;
+  background: radial-gradient(circle at center, #358f5f 0%, #245e3e 100%);
   color: white;
   overflow: hidden;
 }
@@ -1460,32 +1510,41 @@ const handleGameEvent = (data) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
-  background-color: rgba(0, 0, 0, 0.2);
+  padding: 15px 25px;
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+
+.header-left, .header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .game-header h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.game-info {
-  display: flex;
-  gap: 20px;
+.back-btn {
+  color: white;
+  font-size: 14px;
 }
 
-.room-code, .game-status {
-  padding: 5px 10px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 5px;
+.info-tag {
+  font-weight: bold;
+  border: none;
 }
 
 .game-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20px;
-  gap: 20px;
+  padding: 10px;
   overflow: hidden;
   position: relative;
 }
@@ -1495,141 +1554,195 @@ const handleGameEvent = (data) => {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  z-index: 5;
 }
 
 .top-player, .bottom-player {
-  flex: 1;
-  max-height: 25%;
+  height: 180px;
+  justify-content: flex-start;
 }
 
 .left-player, .right-player {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  max-height: 50%;
+  top: 45%;
+  transform: translateY(-50%); 
+  width: 120px;
 }
 
 .left-player {
   left: 20px;
+  align-items: flex-start;
 }
 
 .right-player {
   right: 20px;
+  align-items: flex-end;
 }
 
 .player-info {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 15px;
+  border-radius: 30px;
+  backdrop-filter: blur(4px);
+}
+
+.left-player .player-info, .right-player .player-info {
+  flex-direction: column;
+  padding: 15px 10px;
+  border-radius: 15px;
+}
+
+.avatar-wrapper {
+  position: relative;
+}
+
+.player-avatar {
+  background: #667eea;
+  font-weight: bold;
+  font-size: 18px;
+  border: 2px solid rgba(255,255,255,0.5);
+}
+
+.player-avatar.self {
+  background: #e6a23c;
+}
+
+.role-badge {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.role-badge.landlord {
+  background: #f56c6c;
+}
+
+.player-detail {
+  display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
 }
 
 .player-name {
-  font-size: 1rem;
+  font-size: 14px;
   font-weight: bold;
-}
-
-.player-status {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.landlord-tag {
-  background-color: #ffc107;
-  color: #000;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 0.8rem;
-  font-weight: bold;
-}
-
-.card-count {
-  background-color: rgba(0, 0, 0, 0.3);
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 0.8rem;
+  margin-bottom: 2px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
 .player-cards {
   display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
+  margin-top: 5px;
   justify-content: center;
+  height: 60px;
 }
 
 .card {
-  width: 50px;
-  height: 70px;
+  width: 60px;
+  height: 84px;
   border-radius: 5px;
   display: flex;
   justify-content: center;
   align-items: center;
   font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 1.2rem;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  background-color: #fff;
+  user-select: none;
 }
 
 .card.back {
   background-color: #8B0000;
   border: 2px solid #650000;
+  background-image: repeating-linear-gradient(45deg, #8B0000 0, #8B0000 5px, #9e0000 5px, #9e0000 10px);
+  width: 40px;
+  height: 56px;
+  margin: 0 -25px; /* Overlap cards */
 }
 
 .card.back.vertical {
-  transform: rotate(90deg);
+  margin: -40px 0; /* Vertical overlap */
 }
 
 .card.spade, .card.club {
-  background-color: #fff;
   color: #000;
-  border: 2px solid #ccc;
-  background-image: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
 }
 
 .card.heart, .card.diamond {
-  background-color: #fff;
   color: #ff0000;
-  border: 2px solid #ccc;
-  background-image: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
 }
 
 .card.selected {
-  transform: translateY(-15px);
+  transform: translateY(-20px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
   border: 3px solid #ffc107;
+  z-index: 10;
 }
 
 /* 大小王样式 */
 .card.joker {
-  font-size: 1.5rem;
-  border: 2px solid #ccc;
+  font-size: 1.2rem;
 }
 
 /* 小王（BJ）样式 - 黑色背景 */
 .card.joker.bj {
-  background-color: #333;
-  color: white;
-  background-image: linear-gradient(135deg, #222 0%, #444 100%);
+  color: #000;
 }
 
 /* 大王（RJ）样式 - 红色背景 */
 .card.joker.rj {
-  background-color: #dc3545;
-  color: white;
-  background-image: linear-gradient(135deg, #c82333 0%, #dc3545 100%);
+  color: #ff0000;
 }
 
 .my-cards {
   display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
   justify-content: center;
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 10px 0;
+  padding: 20px 0;
+  height: 120px;
+  align-items: flex-end;
+}
+
+.my-cards .card {
+  margin: 0 -15px; /* Overlap my cards */
+  width: 80px;
+  height: 112px;
+  font-size: 1.5rem;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+}
+
+.my-cards .card:hover {
+  transform: translateY(-10px);
+  z-index: 5;
+}
+
+.my-cards .card.selected {
+  transform: translateY(-25px);
+  z-index: 10;
+}
+
+.bottom-player {
+  justify-content: flex-end;
+  padding-bottom: 80px; /* Space for action buttons */
+  height: auto;
+}
+
+.self-info {
+  position: absolute;
+  bottom: 100px;
+  left: 20px;
+  flex-direction: row;
 }
 
 .game-center {
@@ -1643,15 +1756,20 @@ const handleGameEvent = (data) => {
 }
 
 .landlord-cards {
+  position: absolute;
+  top: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  background: rgba(0,0,0,0.2);
+  padding: 10px 20px;
+  border-radius: 10px;
 }
 
 .landlord-cards-label {
-  font-weight: bold;
-  font-size: 1.2rem;
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
 }
 
 .landlord-cards-list {
@@ -1659,19 +1777,53 @@ const handleGameEvent = (data) => {
   gap: 5px;
 }
 
+.landlord-cards-list .card {
+  width: 40px;
+  height: 56px;
+  font-size: 0.9rem;
+}
+
+.game-message-container {
+  margin: 20px 0;
+  z-index: 20;
+}
+
 .game-message {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: bold;
   text-align: center;
+  background: rgba(0,0,0,0.6);
+  padding: 10px 30px;
+  border-radius: 50px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  animation: fadeIn 0.3s ease;
 }
 
 .current-turn {
-  background-color: #ffc107;
-  color: #000;
-  padding: 10px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.turn-text {
+  font-size: 1.1rem;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.countdown {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 5px 15px;
   border-radius: 20px;
   font-weight: bold;
-  font-size: 1.2rem;
+}
+
+.countdown.urgent {
+  background: rgba(245, 108, 108, 0.8);
   animation: pulse 1s infinite;
 }
 
@@ -1681,120 +1833,61 @@ const handleGameEvent = (data) => {
   100% { transform: scale(1); }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .action-buttons {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   justify-content: center;
   gap: 20px;
-  padding: 20px;
-  background-color: rgba(0, 0, 0, 0.2);
+  padding: 15px 30px;
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 50px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   z-index: 100;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 5px;
-  font-size: 1rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 100px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-.btn-primary {
-  background-color: #007bff;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #0056b3;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 123, 255, 0.4);
-}
-
-.btn-primary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 5px rgba(0, 123, 255, 0.4);
-}
-
-.btn-primary:disabled {
-  background-color: #6c757d;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background-color: #545b62;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(108, 117, 125, 0.4);
-}
-
-.btn-secondary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 5px rgba(108, 117, 125, 0.4);
-}
-
-.btn-secondary:disabled {
-  background-color: #adb5bd;
-  cursor: not-allowed;
-  opacity: 0.6;
+  width: auto;
 }
 
 .last-played {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-}
-
-.last-played-label {
-  font-size: 0.8rem;
-  color: #ccc;
+  justify-content: center;
+  margin-top: 5px;
+  background: rgba(0,0,0,0.2);
+  padding: 5px 10px;
+  border-radius: 10px;
 }
 
 .last-played-cards {
   display: flex;
-  gap: 5px;
-}
-
-.game-over {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.8);
-  display: flex;
   justify-content: center;
-  align-items: center;
-  z-index: 1000;
 }
 
-.game-over-content {
-  background-color: white;
-  color: #000;
-  padding: 30px;
-  border-radius: 10px;
+.last-played-cards .card {
+  width: 40px;
+  height: 56px;
+  font-size: 0.9rem;
+  margin: 0 -10px;
+}
+
+.game-result-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  padding: 20px 0;
+  gap: 15px;
 }
 
-.game-over-content h3 {
+.game-result-content h3 {
   margin: 0;
   font-size: 1.5rem;
-  color: #dc3545;
-}
-
-.return-to-room {
-  margin-top: 20px;
+  color: #333;
 }
 </style>

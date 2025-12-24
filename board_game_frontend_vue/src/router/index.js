@@ -6,8 +6,10 @@ import { useUserStore } from '../stores/user';
 const Home = () => import('../views/Home.vue');
 const Login = () => import('../views/Login.vue');
 const Register = () => import('../views/Register.vue');
+const ResetPassword = () => import('../views/ResetPassword.vue');
 const GameRoom = () => import('../views/GameRoom.vue');
 const GamePlay = () => import('../views/GamePlay.vue');
+const Profile = () => import('../views/Profile.vue');
 
 // 创建路由实例
 const router = createRouter({
@@ -42,6 +44,15 @@ const router = createRouter({
       }
     },
     {
+      path: '/reset-password',
+      name: 'resetPassword',
+      component: ResetPassword,
+      meta: {
+        title: '重置密码',
+        requiresAuth: false
+      }
+    },
+    {
       path: '/game-room/:roomId',
       name: 'gameRoom',
       component: GameRoom,
@@ -62,6 +73,15 @@ const router = createRouter({
       },
       // 动态路由参数，roomId用于标识不同的游戏房间
       props: true
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: Profile,
+      meta: {
+        title: '个人资料',
+        requiresAuth: true
+      }
     },
     // 404页面配置
     {
