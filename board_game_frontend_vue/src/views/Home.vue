@@ -11,7 +11,6 @@
           <el-button type="primary" @click="quickStart">快速开始</el-button>
           <el-button @click="createRoom">创建房间</el-button>
           <el-button @click="showJoinDialog = true">加入房间</el-button>
-          <el-button type="info" @click="programmerChannel">程序员通道</el-button>
           <el-button type="danger" @click="logout">退出登录</el-button>
         </div>
         
@@ -141,24 +140,7 @@ const logout = async () => {
   }
 };
 
-// 程序员通道 - 直接加入对局
-const programmerChannel = async () => {
-  try {
-    // 调用创建房间接口，确保房间ID有效
-    const result = await axios.post('/api/game/rooms/custom', {
-      roomName: '程序员测试房间' // 发送测试房间名
-    });
-    // 直接跳转到游戏房间页面，并添加programmer参数标识
-    router.push({
-      path: `/game-room/${result.data.roomId}`,
-      query: { programmer: 'true' }
-    });
-    ElMessage.success('已进入程序员通道，游戏房间创建成功！');
-  } catch (error) {
-    console.error('程序员通道失败：', error);
-    ElMessage.error('程序员通道失败：' + (error.message || '网络错误'));
-  }
-};
+
 </script>
 
 <style scoped>

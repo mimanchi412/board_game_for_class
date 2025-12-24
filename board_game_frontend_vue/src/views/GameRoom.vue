@@ -434,19 +434,6 @@ onMounted(async () => {
   
   await fetchRoomInfo();
   
-  // 检查是否是程序员通道进入，如果是则自动准备并开始游戏
-  if (route.query.programmer === 'true') {
-    // 延迟一段时间确保房间信息已获取
-    setTimeout(async () => {
-      // 自动准备
-      if (!isReady.value) {
-        await toggleReady();
-      }
-      // 自动开始游戏
-      await startGame();
-    }, 1000);
-  }
-  
   // 设置定时器定期刷新房间信息
   roomInfoTimer = setInterval(async () => {
     try {
